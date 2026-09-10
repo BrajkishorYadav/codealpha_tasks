@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>URL Shortener</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    margin: 0;
+    padding: 40px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  p.sub { color: #94a3b8; margin-top: 0; margin-bottom: 28px; }
+  .card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    max-width: 560px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  form { display: flex; gap: 8px; }
+  input[type="text"] {
+    flex: 1;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 0.95rem;
+  }
+  input[type="text"]:focus { outline: 2px solid #6366f1; }
+  button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #6366f1;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  button:hover { background: #4f46e5; }
+  button:disabled { background: #475569; cursor: not-allowed; }
+  #result {
+    margin-top: 18px;
+    padding: 14px;
+    border-radius: 8px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    display: none;
+    word-break: break-all;
+  }
+  #result a { color: #818cf8; font-weight: 600; }
+  #error {
+    margin-top: 14px;
+    color: #f87171;
+    display: none;
+    font-size: 0.9rem;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #334155; }
+  th { color: #94a3b8; font-weight: 600; }
+  td a { color: #818cf8; text-decoration: none; }
+  td.long { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #94a3b8; }
+  .copy-btn {
+    background: transparent;
+    border: 1px solid #475569;
+    color: #cbd5e1;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+  }
+  .copy-btn:hover { background: #334155; }
+</style>
+</head>
+<body>
+
+<h1>🔗 URL Shortener</h1>
+<p class="sub">Paste a long URL and get a short one back.</p>
+
+<div class="card">
+  <form id="shorten-form">
+    <input type="text" id="url-input" placeholder="https://example.com/some/very/long/path" required>
+    <button type="submit" id="submit-btn">Shorten</button>
+  </form>
+
+  <div id="result">
+    <div>Short URL: <a id="short-link" href="#" target="_blank"></a></div>
+    <button class="copy-btn" id="copy-btn" style="margin-top:10px;">Copy</button>
+  </div>
+
+  <div id="error"></div>
+
+  <table id="urls-table">
+    <thead>
+      <tr><th>Short</th><th>Original</th><th>Clicks</th></tr>
+    </thead>
+    <tbody id="urls-body"></tbody>
+  </table>
+</div>
+
+<script>
+const form = document.getElementById('shorten-form');
+const input = document.getElementById('url-input');
+const submitBtn = document.getElementById('submit-btn');
+const resultBox = document.getElementById('result');
+const errorBox = document.getElementById('error');
+const shortLink = document.getElementById('short-link');
+const copyBtn = document.getElementById('copy-btn');
+const urlsBody = document.getElementById('urls-body');
+
+async function loadUrls() {
+  try {
+    const res = await fetch('/api/urls');
+    const urls = await res.json();
+    urlsBody.innerHTML = urls.map(u => `
+      <tr>
+        <td><a href="/${u.short_code}" target="_blank">/${u.short_code}</a></td>
+        <td class="long" title="${u.long_url}">${u.long_url}</td>
+        <td>${u.clicks}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    // silently ignore for the optional table
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.style.display = 'none';
+  resultBox.style.display = 'none';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Shortening...';
+
+  try {
+    const res = await fetch('/api/shorten', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: input.value.trim() })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Something went wrong');
+    }
+
+    shortLink.href = data.short_url;
+    shortLink.textContent = data.short_url;
+    resultBox.style.display = 'block';
+    input.value = '';
+    loadUrls();
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.style.display = 'block';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Shorten';
+  }
+});
+
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(shortLink.href);
+  copyBtn.textContent = 'Copied!';
+  setTimeout(() => copyBtn.textContent = 'Copy', 1500);
+});
+
+loadUrls();
+</script>
+
+</body>
+</html>
